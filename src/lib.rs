@@ -186,7 +186,8 @@ fn transfer(
 
 /// Transfer `value` tokens to address `to` from address `from`.
 ///
-/// Panics if there is insufficient allowance in caller account.
+/// Panics if there is insufficient allowance in caller account or if adding `amount` causes an
+/// overflow.
 ///
 /// ### Parameters
 ///
@@ -280,7 +281,8 @@ fn approve(
 /// if `delta` is greater than the allowance, the allowance is set to 0 and that many coins are
 /// returned to the caller.
 ///
-/// Panics if there is insufficient balance in caller account.
+/// Panics if there is insufficient allowance in `spender` account, insufficient balance in caller
+/// account, adding `delta` causes an overflow, or if converting to [`u128`] or [`i128] fails.
 ///
 /// ### Parameters
 ///
@@ -322,13 +324,6 @@ fn approve_relative(
         }
     }
 
-    let spender_new_allowance = spender_allowance
-        .checked_add(delta)
-        .expect("Overflow when updating spender allowance.")
-        .try_into()
-        .unwrap_or_else(|error| panic!("i128 to u128 conversion failed: {}", error));
-    state.update_allowance(ctx.sender, spender, spender_new_allowance); // update spender allowance
-
     let caller_new_balance = caller_balance
         .checked_add(delta) // add amount delta to caller balance
         .expect("Overflow when updating caller balance.")
@@ -337,6 +332,13 @@ fn approve_relative(
     state
         .balances
         .insert_balance(ctx.sender, caller_new_balance); // update caller balance
+
+    let spender_new_allowance = spender_allowance
+        .checked_add(delta)
+        .expect("Overflow when updating spender allowance.")
+        .try_into()
+        .unwrap_or_else(|error| panic!("i128 to u128 conversion failed: {}", error));
+    state.update_allowance(ctx.sender, spender, spender_new_allowance); // update spender allowance
 
     state
 }
