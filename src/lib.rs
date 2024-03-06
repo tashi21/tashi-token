@@ -2,6 +2,8 @@
 
 #[macro_use]
 extern crate pbc_contract_codegen;
+extern crate pbc_lib as _;
+
 use pbc_contract_common::address::Address;
 use pbc_contract_common::context::ContractContext;
 use pbc_contract_common::sorted_vec_map::SortedVecMap;
@@ -21,7 +23,7 @@ use std::ops::Sub;
 ///   * `_padding`: [[`u16`]; `5`], padding bytes to align the struct.
 #[state]
 #[repr(C)]
-struct TokenState {
+struct TashiTokenState {
     total_supply: u128,
     name: String,
     symbol: String,
@@ -29,7 +31,7 @@ struct TokenState {
     allowed: SortedVecMap<Address, SortedVecMap<Address, u128>>,
     decimals: u8,
     owner: Address,
-    _padding: [u16; 5],
+    _padding: [u8; 10],
 }
 
 /// A map that can store balances.
@@ -55,7 +57,7 @@ impl<V: Sub<V, Output = V> + PartialEq + Copy> BalanceMap<Address, V> for Sorted
 }
 
 // implement struct specific functions
-impl TokenState {
+impl TashiTokenState {
     /// Gets the balance of the specified address.
     ///
     /// ### Parameters:
@@ -122,10 +124,10 @@ fn initialize(
     name: String,
     symbol: String,
     decimals: u8,
-) -> TokenState {
+) -> TashiTokenState {
     let mut balances: SortedVecMap<Address, u128> = SortedVecMap::new();
     balances.insert(ctx.sender, total_supply);
-    TokenState {
+    TashiTokenState {
         total_supply,
         name,
         symbol,
@@ -133,7 +135,7 @@ fn initialize(
         allowed: SortedVecMap::new(),
         decimals,
         owner: ctx.sender,
-        _padding: [0; 5],
+        _padding: [0; 10],
     }
 }
 
@@ -154,10 +156,10 @@ fn initialize(
 #[action(shortname = 0x01)]
 fn transfer(
     ctx: ContractContext,
-    mut state: TokenState,
+    mut state: TashiTokenState,
     receiver: Address,
     amount: u128,
-) -> TokenState {
+) -> TashiTokenState {
     let sender_balance = state.balance_of(&ctx.sender);
     let new_sender_balance = sender_balance
         .checked_sub(amount) // subtract amount from sender balance
@@ -203,11 +205,11 @@ fn transfer(
 #[action(shortname = 0x03)]
 fn transfer_from(
     ctx: ContractContext,
-    mut state: TokenState,
+    mut state: TashiTokenState,
     from: Address,
     receiver: Address,
     amount: u128,
-) -> TokenState {
+) -> TashiTokenState {
     let caller_allowance = state.allowance(&from, &ctx.sender);
     let caller_new_allowance = caller_allowance
         .checked_sub(amount) // subtract amount from caller allowance
@@ -252,10 +254,10 @@ fn transfer_from(
 #[action(shortname = 0x05)]
 fn approve(
     ctx: ContractContext,
-    mut state: TokenState,
+    mut state: TashiTokenState,
     spender: Address,
     amount: u128,
-) -> TokenState {
+) -> TashiTokenState {
     let caller_balance = state.balance_of(&ctx.sender);
     let caller_new_balance = caller_balance
         .checked_sub(amount) // subtract amount from caller balance
@@ -297,10 +299,10 @@ fn approve(
 #[action(shortname = 0x06)]
 fn approve_relative(
     ctx: ContractContext,
-    mut state: TokenState,
+    mut state: TashiTokenState,
     spender: Address,
-    mut delta: i128,
-) -> TokenState {
+    delta: i128,
+) -> TashiTokenState {
     let caller_balance_result: Result<i128, _> = state.balance_of(&ctx.sender).try_into();
     let caller_balance = match caller_balance_result {
         Ok(balance) => balance,
@@ -314,18 +316,19 @@ fn approve_relative(
         Err(error) => panic!("u128 to i128 conversion failed: {}", error),
     };
 
+    let mut checked_delta = delta;
     // return allowance back to caller
     if delta.is_negative() {
         let abs_delta = delta.checked_abs().unwrap_or(i128::MAX);
         // spender has enough allowance to give delta back to caller
         if abs_delta >= spender_allowance {
             // return whatever allowance is left back to caller
-            delta = -spender_allowance;
+            checked_delta = -spender_allowance;
         }
     }
 
     let caller_new_balance = caller_balance
-        .checked_add(delta) // add amount delta to caller balance
+        .checked_sub(checked_delta) // add amount delta to caller balance
         .expect("Overflow when updating caller balance.")
         .try_into()
         .unwrap_or_else(|error| panic!("i128 to u128 conversion failed: {}", error));
@@ -334,7 +337,7 @@ fn approve_relative(
         .insert_balance(ctx.sender, caller_new_balance); // update caller balance
 
     let spender_new_allowance = spender_allowance
-        .checked_add(delta)
+        .checked_add(checked_delta)
         .expect("Overflow when updating spender allowance.")
         .try_into()
         .unwrap_or_else(|error| panic!("i128 to u128 conversion failed: {}", error));
