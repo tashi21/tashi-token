@@ -1,5 +1,5 @@
 [package]
-name = "tashi_token"
+name = "tashi-token"
 version = "1.0.0"
 edition = "2021"
 license = "MIT"
@@ -20,4 +20,10 @@ read_write_state_derive = { git = "https://gitlab.com/partisiablockchain/languag
 create_type_spec_derive = { git = "https://gitlab.com/partisiablockchain/language/contract-sdk.git" }
 
 [features]
-abi = ["pbc_contract_common/abi", "pbc_contract_codegen/abi", "pbc_traits/abi", "create_type_spec_derive/abi", "pbc_lib/abi"]
+abi = [
+    "pbc_contract_common/abi",
+    "pbc_contract_codegen/abi",
+    "pbc_traits/abi",
+    "create_type_spec_derive/abi",
+    "pbc_lib/abi",
+]
